@@ -1,12 +1,18 @@
-from __future__ import annotations
-
 from datetime import datetime, date
 from typing import Optional
 
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import UniqueConstraint
 
 
+# =========================
+# Conference
+# =========================
 class Conference(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("year", "name", name="uq_conference_year_name"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     year: int
     name: str
@@ -21,17 +27,34 @@ class Conference(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # 🔥 관계 (List 쓰지 말 것!)
+    tasks: list["Task"] = Relationship(
+        back_populates="conference",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    milestones: list["Milestone"] = Relationship(
+        back_populates="conference",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    audit_logs: list["AuditLog"] = Relationship(
+        back_populates="conference",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
+
+# =========================
+# Task
+# =========================
 class Task(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    conference_id: int = Field(index=True)
+    conference_id: int = Field(foreign_key="conference.id", index=True)
 
-    task_group: str  # PLAN / CFP_PR / PROGRAM / ...
+    task_group: str
     name: str
     description: Optional[str] = None
 
-    status: str = "todo"      # todo/doing/done/blocked
-    priority: str = "med"     # low/med/high
+    status: str = "todo"
+    priority: str = "med"
 
     start_date: Optional[date] = None
     due_date: Optional[date] = None
@@ -39,68 +62,85 @@ class Task(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    conference: Optional[Conference] = Relationship(back_populates="tasks")
+    assignments: list["Assignment"] = Relationship(
+        back_populates="task",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
+
+# =========================
+# Person
+# =========================
 class Person(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     affiliation: Optional[str] = None
-
-    # 사람 "직함/역할" (예: 조직위원장, 총무 등) - 사람 관리 화면에서 편집
     role_title: Optional[str] = None
 
-    # (선택) 연락처 확장하고 싶으면 여기서부터 추가하되, DB 마이그레이션 필요
-    # email: Optional[str] = None
-    # phone: Optional[str] = None
-
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+# =========================
+# Assignment
+# =========================
 class Assignment(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    task_id: int = Field(index=True)
+    task_id: int = Field(foreign_key="task.id", index=True)
     person_id: int = Field(index=True)
 
-    # ✅ 이제 lead/support가 아니라 role_key 저장 (chair, secretary, program_chair, ...)
     responsibility: str = "chair"
-
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    task: Optional[Task] = Relationship(back_populates="assignments")
 
+
+# =========================
+# RoleTemplate
+# =========================
 class RoleTemplate(SQLModel, table=True):
-    """
-    ✅ 역할 템플릿(= assignment.responsibility에 들어갈 key와 UI 표시 label)
-    """
     id: Optional[int] = Field(default=None, primary_key=True)
-    key: str = Field(index=True, unique=True)       # ex) chair, secretary, program_chair
-    label: str                                     # ex) 조직위원장, 총무, 프로그램위원장
+    key: str = Field(index=True, unique=True)
+    label: str
     sort_order: int = 100
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+# =========================
+# Milestone
+# =========================
 class Milestone(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    conference_id: int = Field(index=True)
+    conference_id: int = Field(foreign_key="conference.id", index=True)
+
     key: str
     name: str
     relative_days: int
     target_date: date
     locked: bool = False
 
+    conference: Optional[Conference] = Relationship(back_populates="milestones")
 
+
+# =========================
+# AuditLog
+# =========================
 class AuditLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    conference_id: int = Field(index=True)
+    conference_id: int = Field(foreign_key="conference.id", index=True)
     actor_person_id: Optional[int] = Field(default=None)
 
     entity_type: str
     entity_id: int
     action: str
 
-    # ✅ dict 컬럼 금지(에러났던 부분). JSON 문자열로 저장.
     before_json: str = "{}"
     after_json: str = "{}"
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    conference: Optional[Conference] = Relationship(back_populates="audit_logs")

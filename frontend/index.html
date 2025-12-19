@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Conference OS (MVP) - Kanban</title>
+  <title>Conference OS (MVP)</title>
   <style>
     body { font-family: Arial, Helvetica, sans-serif; margin: 18px; }
     h1 { margin: 0 0 10px 0; }
@@ -13,8 +13,10 @@
     select, input, textarea { padding:6px; font-size:14px; }
     .hint { color:#666; font-size:12px; }
     .divider{ height:1px; background:#eee; margin:10px 0; }
+    .muted { color:#777; font-size:12px; }
+    .danger { color:#b00020; font-size:12px; }
 
-    .tabs { display:flex; gap:8px; margin: 10px 0 0 0; }
+    .tabs { display:flex; gap:8px; margin: 10px 0 0 0; flex-wrap:wrap; }
     .tabbtn {
       padding: 8px 12px;
       border: 1px solid #ddd;
@@ -50,6 +52,7 @@
     .card .title{ font-weight:700; font-size:14px; margin-bottom:6px; }
     .card .meta{ font-size:12px; color:#444; line-height:1.5; white-space:pre-wrap; }
 
+    /* Priority badge - 더 눈에 띄게 */
     .pill{
       display:inline-block;
       font-size:11px;
@@ -58,11 +61,24 @@
       border:1px solid #ddd;
       margin-left:6px;
       vertical-align:middle;
-      font-weight:700;
+      font-weight:800;
+      background:#f7f7f7;
     }
-    .pill.high{ border-color:#ffb4b4; }
-    .pill.med{ border-color:#ffe1a6; }
-    .pill.low{ border-color:#bfe7bf; }
+    .pill.high{
+      border-color:#ff6b6b;
+      background:#ffe8e8;
+      color:#8a0000;
+    }
+    .pill.med{
+      border-color:#ffb020;
+      background:#fff2d9;
+      color:#7a4b00;
+    }
+    .pill.low{
+      border-color:#48b04d;
+      background:#e7ffe9;
+      color:#0a5a10;
+    }
 
     .due-none { color:#9a9a9a; }
     .due-soon { color:#7a5d00; font-weight:700; }
@@ -90,12 +106,10 @@
     .modal .full{ grid-column: 1 / -1; }
     .modal textarea{ width:100%; min-height: 90px; }
 
-    /* ✅ 제목칸 너무 길지 않게 (요청) */
+    /* 제목칸 */
     #fName { width:100%; max-width: 520px; }
 
     .modal .footer{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
-    .muted { color:#777; font-size:12px; }
-    .danger { color:#b00020; font-size:12px; }
 
     .auditBox{
       display:none;
@@ -122,10 +136,11 @@
       margin-left:8px;
       color:#333;
       background:#fafafa;
+      font-weight:800;
     }
-    .prioHint.high{ border-color:#ffb4b4; }
-    .prioHint.med{ border-color:#ffe1a6; }
-    .prioHint.low{ border-color:#bfe7bf; }
+    .prioHint.high{ border-color:#ff6b6b; background:#ffe8e8; color:#8a0000; }
+    .prioHint.med{ border-color:#ffb020; background:#fff2d9; color:#7a4b00; }
+    .prioHint.low{ border-color:#48b04d; background:#e7ffe9; color:#0a5a10; }
 
     /* Tables (People/RoleTemplates) */
     table { border-collapse: collapse; width: 100%; }
@@ -137,6 +152,192 @@
     .w200 { width:200px; }
     .w260 { width:260px; }
     .actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+    /* =========================
+       Calendar (Monthly)
+       ========================= */
+    .calBar{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      margin: 10px 0;
+    }
+    .calTitle{
+      font-weight:900;
+      font-size:16px;
+      margin-right:10px;
+    }
+    .calGrid{
+      display:grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap:8px;
+    }
+    .calHead{
+      font-size:12px;
+      font-weight:800;
+      color:#444;
+      padding:6px 8px;
+      border-radius:10px;
+      background:#fafafa;
+      border:1px solid #eee;
+      text-align:center;
+    }
+    .calCell{
+      min-height:120px;
+      border:1px solid #eee;
+      border-radius:12px;
+      background:#fff;
+      padding:8px;
+      overflow:hidden;
+    }
+    .calCell.mutedDay{ background:#fafafa; color:#888; }
+    .calDayNo{
+      font-weight:900;
+      font-size:13px;
+      margin-bottom:6px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .calTodayDot{
+      width:8px; height:8px; border-radius:999px;
+      background:#111;
+      opacity:.35;
+      display:inline-block;
+    }
+    .calItem{
+      border:1px solid #eee;
+      border-radius:10px;
+      padding:6px 8px;
+      margin:6px 0;
+      font-size:12px;
+      line-height:1.25;
+      cursor:pointer;
+      background:#fff;
+    }
+    .calItem:hover{ border-color:#cfcfcf; }
+    .calItem .tline{
+      font-weight:800;
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      align-items:center;
+    }
+    .calItem .subline{
+      margin-top:3px;
+      color:#555;
+      font-size:11px;
+      opacity:.9;
+    }
+
+    /* status hint in calendar item */
+    .stTag{
+      font-size:10px;
+      padding:2px 7px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      background:#fafafa;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .stTag.todo{ background:#f3f3f3; }
+    .stTag.doing{ background:#fff2d9; border-color:#ffb020; }
+    .stTag.done{ background:#e7ffe9; border-color:#48b04d; }
+    .stTag.blocked{ background:#ffe8e8; border-color:#ff6b6b; }
+
+    /* =========================
+       Gantt
+       ========================= */
+    .gWrap{ margin-top:10px; }
+    .gToolbar{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      padding:10px 0;
+    }
+    .gAxis{
+      position:relative;
+      height:40px;
+      border:1px solid #eee;
+      border-radius:12px;
+      background:#fff;
+      overflow:hidden;
+      margin: 10px 0 14px 0;
+    }
+    .gAxisWeek{
+      position:absolute; top:0; bottom:0;
+      border-left:1px solid rgba(0,0,0,0.12);
+      display:flex;
+      align-items:flex-start;
+      justify-content:flex-start;
+      padding-top:6px;
+      padding-left:6px;
+      font-size:11px;
+      font-weight:900;
+      color:#333;
+      background:transparent;
+      white-space:nowrap;
+      pointer-events:none;
+    }
+    .gAxisMinor{
+      position:absolute; top:0; bottom:0;
+      width:1px;
+      background:rgba(0,0,0,0.06);
+      pointer-events:none;
+    }
+
+    .gRow{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:10px;
+      align-items:center;
+      padding:10px;
+      border:1px solid #eee;
+      background:#fff;
+      border-radius:12px;
+      margin-bottom:10px;
+    }
+    .gLeft b{ font-size:14px; }
+    .gLeft .meta2{
+      margin-top:6px;
+      font-size:12px;
+      color:#444;
+      line-height:1.35;
+    }
+
+    .gBarArea{
+      position:relative;
+      height:26px;
+      border:1px solid #e0e0e0;
+      border-radius:999px;
+      background:#fff;
+      overflow:hidden;
+    }
+    .gWeekend{
+      position:absolute; top:0; bottom:0;
+      background:rgba(0,0,0,0.04);
+    }
+    .gTodayLine{
+      position:absolute; top:0; bottom:0;
+      width:2px;
+      background:rgba(0,0,0,0.35);
+    }
+
+    .gBar{
+      position:absolute;
+      height:70%;
+      top:15%;
+      border-radius:999px;
+      border:1px solid #ddd;
+      background:#f4f4f4;
+      cursor:pointer;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+    }
+    .gBar.todo{ background:#f0f0f0; }
+    .gBar.doing{ background:#fff3cd; border-color:#f5c26b; }
+    .gBar.done{ background:#d6f5d6; border-color:#8bd18b; }
+    .gBar.blocked{ background:#ffd6d6; border-color:#ff9b9b; }
+
+    /* priority 강조(간트 bar 가장자리) */
+    .gBar.prio-high{ border-width:2px; border-color:#ff6b6b; }
+    .gBar.prio-med{ border-width:2px; border-color:#ffb020; }
+    .gBar.prio-low{ border-width:2px; border-color:#48b04d; }
   </style>
 </head>
 <body>
@@ -145,6 +346,8 @@
   <div class="row bar">
     <button id="btnCreate">1) 2026 학회 생성 + 마일스톤/기본업무 생성</button>
     <button id="btnReload">2) 불러오기</button>
+
+    <button id="btnDeleteConf">선택 학회 삭제(관리자)</button>
 
     <span class="hint">Conference:</span>
     <select id="selConf"></select>
@@ -165,6 +368,9 @@
 
   <div class="tabs">
     <button class="tabbtn active" data-tab="kanban">칸반</button>
+    <button class="tabbtn" data-tab="calendar">일정(월간)</button>
+    <button class="tabbtn" data-tab="gantt">일정(간트)</button>
+    <button class="tabbtn" data-tab="peopleview">사람별 보기</button>
     <button class="tabbtn" data-tab="people">사람 관리</button>
     <button class="tabbtn" data-tab="roles">역할 템플릿</button>
   </div>
@@ -191,6 +397,77 @@
         <div id="colBlocked" class="dropzone" data-status="blocked"></div>
       </div>
     </div>
+  </div>
+
+  <!-- ===================== -->
+  <!-- Calendar Monthly Panel -->
+  <!-- ===================== -->
+  <div id="panel-calendar" class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <b>일정(월간)</b>
+        <div class="small">Due date 기준으로 표시됩니다. (due 없는 항목은 캘린더에 표시되지 않음)</div>
+      </div>
+      <div class="row">
+        <button id="btnCalPrev">◀</button>
+        <div class="calTitle" id="calTitle"></div>
+        <button id="btnCalNext">▶</button>
+        <button id="btnCalToday">오늘</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="calGrid" id="calGrid"></div>
+  </div>
+
+  <!-- ===================== -->
+  <!-- Gantt Panel -->
+  <!-- ===================== -->
+  <div id="panel-gantt" class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <b>간트(전체 기준)</b>
+        <div class="small">start~due 기준 막대 표시 (start 없으면 due-7일로 자동 처리) · <b>기본 to는 학회 종료일 + 10일</b></div>
+      </div>
+    </div>
+
+    <div class="gToolbar">
+      <span class="hint">기간:</span>
+      <input id="gFrom" type="date"/>
+      <input id="gTo" type="date"/>
+      <button id="btnGAuto">자동 범위</button>
+      <span class="hint">* due 없는 항목은 표시 제외</span>
+    </div>
+
+    <div id="gAxis" class="gAxis"></div>
+    <div class="gWrap" id="gWrap"></div>
+
+    <div class="muted" id="gSummary"></div>
+  </div>
+
+  <!-- ===================== -->
+  <!-- People View Panel -->
+  <!-- ===================== -->
+  <div id="panel-peopleview" class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <b>사람별 보기</b>
+        <div class="small">특정 사람을 선택하면 그 사람에게 할당된 임무 + due 일정표를 보여줍니다.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row">
+      <span class="hint">사람:</span>
+      <select id="pvPerson"></select>
+      <button id="btnPvReload">새로고침</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div id="pvBox"></div>
   </div>
 
   <!-- ===================== -->
@@ -390,12 +667,20 @@
 <script>
   const API = "http://127.0.0.1:8000";
 
+  // ✅ 관리자 암호(프론트 MVP용) - 원하면 env/config로 옮기기
+  const ADMIN_PASSWORD = "admin1234";
+
   let CURRENT_CONF_ID = null;
+  let CURRENT_CONF = null; // ✅ 선택된 학회 객체 저장 (end_date+10 등에 사용)
   let TASKS = [];
   let PEOPLE = [];
-  let ROLES = []; // role templates
+  let ROLES = [];
   const ASSIGNEE_CACHE = new Map();
   let MODAL_TASK = null;
+
+  // calendar state
+  let CAL_Y = null;
+  let CAL_M = null; // 0-11
 
   function esc(s){
     return (s ?? "").toString()
@@ -475,12 +760,15 @@
     return await r.json();
   }
 
-  async function apiDelete(path){
-    const r = await fetch(`${API}${path}`, { method:"DELETE" });
+  async function apiDelete(path, headers = {}){
+    const r = await fetch(`${API}${path}`, {
+      method:"DELETE",
+      headers
+    });
     if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return await r.json();
   }
-
+  
   // -----------------------
   // Tabs
   // -----------------------
@@ -490,6 +778,11 @@
     });
     document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
     document.getElementById(`panel-${name}`).classList.add("active");
+
+    // 탭 들어갈 때 렌더 보강
+    if(name === "calendar") renderCalendar();
+    if(name === "gantt") renderGantt();
+    if(name === "peopleview") renderPeopleView();
   }
 
   document.querySelectorAll(".tabbtn").forEach(b=>{
@@ -509,9 +802,27 @@
       opt.textContent = `${c.year} - ${c.name}`;
       sel.appendChild(opt);
     });
+
     if(cons.length){
-      CURRENT_CONF_ID = cons[0].id;
+      // 기존 선택 유지 시도
+      let picked = cons[0];
+      if(CURRENT_CONF_ID){
+        const found = cons.find(x=> String(x.id)===String(CURRENT_CONF_ID));
+        if(found) picked = found;
+      }
+      CURRENT_CONF_ID = picked.id;
+      CURRENT_CONF = picked;
       sel.value = String(CURRENT_CONF_ID);
+    } else {
+      CURRENT_CONF_ID = null;
+      CURRENT_CONF = null;
+    }
+
+    // calendar init default to current month
+    if(CAL_Y === null || CAL_M === null){
+      const now = new Date();
+      CAL_Y = now.getFullYear();
+      CAL_M = now.getMonth();
     }
   }
 
@@ -541,10 +852,8 @@
           ASSIGNEE_CACHE.set(t.id, "");
           return;
         }
-        // ✅ 여러 개 쌓일 수 있으니 "가장 마지막"을 표시
         assigns.sort((a,b)=> (a.id||0) - (b.id||0));
         const a = assigns[assigns.length - 1];
-
         const roleLabel = a.role_label || a.responsibility || "";
         ASSIGNEE_CACHE.set(t.id, `${a.name}(${roleLabel})`);
       }catch(e){
@@ -564,9 +873,15 @@
     await loadRoles();
     await loadPeople();
     await loadTasks();
+
     renderBoard();
+    renderCalendar();
+    renderGantt();
+    renderPeopleView();
+
     renderPeopleTable();
     renderRoleTable();
+    fillPeopleViewSelect();
   }
 
   // -----------------------
@@ -734,7 +1049,7 @@
   };
 
   // -----------------------
-  // Board render
+  // Board render (TODO: id 순)
   // -----------------------
   function clearBoard(){
     ["colTodo","colDoing","colDone","colBlocked"].forEach(id=>{
@@ -785,7 +1100,10 @@
       blocked: document.getElementById("colBlocked"),
     };
 
-    TASKS.forEach(t=>{
+    // ✅ todo는 id 오름차순, 나머지도 보기 좋게 id 오름차순
+    const sorted = TASKS.slice().sort((a,b)=> (a.id||0) - (b.id||0));
+
+    sorted.forEach(t=>{
       const col = map[t.status] || map.todo;
       addCard(col, t);
     });
@@ -862,7 +1180,6 @@
     const assigns = await fetchAssignments(taskId);
     if(!assigns || assigns.length === 0){
       selPerson.value = "";
-      // 첫번째 템플릿 기본
       selRole.value = (ROLES?.[0]?.key) || "chair";
       return;
     }
@@ -882,7 +1199,6 @@
 
   function applyStatusRules(status){
     const isTodo = (status === "todo");
-
     const lock = (id, v)=>{
       const el = document.getElementById(id);
       el.disabled = v;
@@ -987,7 +1303,7 @@
         if(personId){
           await apiPost(`/tasks/${t.id}/assign`, {
             person_id: Number(personId),
-            responsibility: roleKey   // ✅ role key 저장
+            responsibility: roleKey
           });
         }
       }
@@ -1000,13 +1316,488 @@
   }
 
   // -----------------------
+  // Calendar (monthly) - due date 기준
+  // -----------------------
+  function ymdOfDate(d){
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${dd}`;
+  }
+
+  function renderCalendar(){
+    const grid = document.getElementById("calGrid");
+    const title = document.getElementById("calTitle");
+    if(!grid || CAL_Y === null || CAL_M === null) return;
+
+    const first = new Date(CAL_Y, CAL_M, 1);
+    const last = new Date(CAL_Y, CAL_M+1, 0);
+    const startDow = first.getDay(); // 0 Sun
+    const daysInMonth = last.getDate();
+
+    title.textContent = `${CAL_Y}년 ${CAL_M+1}월`;
+
+    // due-date map
+    const dueMap = new Map(); // ymd => tasks[]
+    TASKS.forEach(t=>{
+      const due = fmtISODate(t.due_date);
+      if(!due) return;
+      if(!dueMap.has(due)) dueMap.set(due, []);
+      dueMap.get(due).push(t);
+    });
+
+    // sort each day by id
+    for(const [k, arr] of dueMap.entries()){
+      arr.sort((a,b)=> (a.id||0) - (b.id||0));
+    }
+
+    grid.innerHTML = "";
+
+    const heads = ["일","월","화","수","목","금","토"];
+    heads.forEach(h=>{
+      const div = document.createElement("div");
+      div.className = "calHead";
+      div.textContent = h;
+      grid.appendChild(div);
+    });
+
+    // 6주 고정 느낌(월간)
+    const totalCells = 42;
+    const today = todayYMD();
+
+    for(let i=0;i<totalCells;i++){
+      const cell = document.createElement("div");
+      cell.className = "calCell";
+
+      const dayNo = i - startDow + 1;
+      const inMonth = (dayNo >= 1 && dayNo <= daysInMonth);
+
+      let ymd = null;
+      if(inMonth){
+        const d = new Date(CAL_Y, CAL_M, dayNo);
+        ymd = ymdOfDate(d);
+      } else {
+        cell.classList.add("mutedDay");
+      }
+
+      const header = document.createElement("div");
+      header.className = "calDayNo";
+      header.innerHTML = `
+        <span>${inMonth ? dayNo : ""}</span>
+        ${ymd === today ? `<span class="calTodayDot"></span>` : `<span></span>`}
+      `;
+      cell.appendChild(header);
+
+      if(inMonth && ymd && dueMap.has(ymd)){
+        const items = dueMap.get(ymd);
+        items.forEach(t=>{
+          const div = document.createElement("div");
+          div.className = "calItem";
+          const ass = ASSIGNEE_CACHE.get(t.id) || "";
+
+          div.innerHTML = `
+            <div class="tline">
+              <span>#${esc(t.id)} ${esc(t.name)} ${prioPill(t.priority)}</span>
+              <span class="stTag ${esc(t.status)}">${esc(t.status)}</span>
+            </div>
+            <div class="subline">
+              [${esc(t.task_group)}] ${ass ? ` · ${esc(ass)}` : ""}
+            </div>
+          `;
+          div.onclick = ()=> openModalFromTask(t);
+          cell.appendChild(div);
+        });
+      }
+
+      grid.appendChild(cell);
+    }
+  }
+
+  document.getElementById("btnCalPrev").onclick = ()=>{
+    CAL_M -= 1;
+    if(CAL_M < 0){ CAL_M = 11; CAL_Y -= 1; }
+    renderCalendar();
+  };
+  document.getElementById("btnCalNext").onclick = ()=>{
+    CAL_M += 1;
+    if(CAL_M > 11){ CAL_M = 0; CAL_Y += 1; }
+    renderCalendar();
+  };
+  document.getElementById("btnCalToday").onclick = ()=>{
+    const now = new Date();
+    CAL_Y = now.getFullYear();
+    CAL_M = now.getMonth();
+    renderCalendar();
+  };
+
+  // -----------------------
+  // Gantt helpers
+  // -----------------------
+  function toIntDay(ymd){
+    const d = new Date(ymd + "T00:00:00");
+    return Math.floor(d.getTime() / (24*60*60*1000));
+  }
+  function addDays(ymd, delta){
+    const d = new Date(ymd + "T00:00:00");
+    d.setDate(d.getDate() + delta);
+    return ymdOfDate(d);
+  }
+
+  function taskStartEnd(t){
+    const due = fmtISODate(t.due_date);
+    if(!due) return null;
+    let start = fmtISODate(t.start_date);
+    if(!start){
+      start = addDays(due, -7);
+    }
+    return { start, due };
+  }
+
+  function autoGanttRange(tasks){
+    // to 기본값: 학회 종료일 + 10
+    let confEnd = null;
+    if(CURRENT_CONF && CURRENT_CONF.end_date){
+      confEnd = String(CURRENT_CONF.end_date).slice(0,10);
+    }
+
+    const xs = [];
+    tasks.forEach(t=>{
+      const se = taskStartEnd(t);
+      if(!se) return;
+      xs.push(se.start, se.due);
+    });
+
+    if(xs.length === 0){
+      const baseFrom = confEnd ? addDays(confEnd, -60) : todayYMD();
+      const baseTo = confEnd ? addDays(confEnd, 10) : addDays(todayYMD(), 30);
+      return {from: baseFrom, to: baseTo};
+    }
+
+    xs.sort((a,b)=> toIntDay(a)-toIntDay(b));
+    let from = xs[0];
+    let to = xs[xs.length-1];
+
+    if(confEnd){
+      const confTo = addDays(confEnd, 10);
+      if(toIntDay(confTo) > toIntDay(to)){
+        to = confTo;
+      }
+    }
+
+    return {from: addDays(from, -3), to: addDays(to, 3)};
+  }
+
+  function mondayOf(ymd){
+    const d = new Date(ymd + "T00:00:00");
+    const dow = d.getDay(); // 0 Sun, 1 Mon...
+    const diff = (dow === 0) ? -6 : (1 - dow);
+    d.setDate(d.getDate() + diff);
+    return ymdOfDate(d);
+  }
+
+  function isoWeekLabel(ymd){
+    // 간단 label: "Wk MM/DD"
+    const d = new Date(ymd + "T00:00:00");
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `Wk ${mm}/${dd}`;
+  }
+
+  function renderGanttAxis(from, to){
+    const axis = document.getElementById("gAxis");
+    axis.innerHTML = "";
+
+    const fromD = toIntDay(from);
+    const toD = toIntDay(to);
+    const span = Math.max(1, (toD - fromD + 1));
+
+    // Week ticks (Monday boundary)
+    let cur = mondayOf(from);
+    // cur가 from보다 너무 뒤면 한 주 전으로
+    if(toIntDay(cur) > fromD) cur = addDays(cur, -7);
+
+    while(toIntDay(cur) <= toD){
+      const dInt = toIntDay(cur);
+      const leftPct = ((dInt - fromD) / span) * 100;
+
+      const wk = document.createElement("div");
+      wk.className = "gAxisWeek";
+      wk.style.left = `${leftPct}%`;
+      wk.style.width = "0px";
+      wk.textContent = isoWeekLabel(cur);
+      axis.appendChild(wk);
+
+      // minor line: 월요일 외에 중간(수요일 느낌) 가벼운 선 하나
+      const mid = addDays(cur, 3);
+      const midInt = toIntDay(mid);
+      if(midInt >= fromD && midInt <= toD){
+        const minor = document.createElement("div");
+        minor.className = "gAxisMinor";
+        minor.style.left = `${((midInt - fromD) / span) * 100}%`;
+        axis.appendChild(minor);
+      }
+
+      cur = addDays(cur, 7);
+    }
+  }
+
+  function renderGantt(){
+    const wrap = document.getElementById("gWrap");
+    if(!wrap) return;
+
+    // due 있는 것만
+    const items = TASKS
+      .filter(t => fmtISODate(t.due_date))
+      .slice()
+      .sort((a,b)=> (a.id||0) - (b.id||0));
+
+    // 초기 from/to 세팅
+    const fromInp = document.getElementById("gFrom");
+    const toInp = document.getElementById("gTo");
+
+    if(!fromInp.value || !toInp.value){
+      const rng = autoGanttRange(items);
+      fromInp.value = rng.from;
+      toInp.value = rng.to;
+    }
+
+    const from = fromInp.value;
+    const to = toInp.value;
+
+    renderGanttAxis(from, to);
+
+    const fromD = toIntDay(from);
+    const toD = toIntDay(to);
+    const span = Math.max(1, (toD - fromD + 1));
+
+    wrap.innerHTML = "";
+
+    let shown = 0;
+    items.forEach(t=>{
+      const it = taskStartEnd(t);
+      if(!it) return;
+
+      const s = toIntDay(it.start);
+      const e = toIntDay(it.due);
+
+      if(e < fromD || s > toD) return;
+
+      shown++;
+
+      const row = document.createElement("div");
+      row.className = "gRow";
+
+      const ass = ASSIGNEE_CACHE.get(t.id) || "";
+      row.innerHTML = `
+        <div class="gLeft">
+          <b>#${esc(t.id)} [${esc(t.task_group)}] ${esc(t.name)} ${prioPill(t.priority)}</b>
+          <div class="meta2">
+            status: ${esc(t.status)} · priority: ${esc(t.priority)}<br/>
+            start: ${esc(it.start)} · due: ${esc(it.due)}
+            ${ass ? `<br/>assignee: ${esc(ass)}` : ""}
+          </div>
+        </div>
+        <div class="gBarArea"></div>
+      `;
+
+      const area = row.querySelector(".gBarArea");
+
+      // weekend shading + today line
+      for(let day = fromD; day <= toD; day++){
+        const dt = new Date(day * 24*60*60*1000);
+        const dow = dt.getDay(); // 0=Sun,6=Sat
+        if(dow === 0 || dow === 6){
+          const leftPct = ((day - fromD) / span) * 100;
+          const wPct = (1 / span) * 100;
+          const w = document.createElement("div");
+          w.className = "gWeekend";
+          w.style.left = `${leftPct}%`;
+          w.style.width = `${wPct}%`;
+          area.appendChild(w);
+        }
+      }
+      const td = toIntDay(todayYMD());
+      if(td >= fromD && td <= toD){
+        const leftPct = ((td - fromD) / span) * 100;
+        const line = document.createElement("div");
+        line.className = "gTodayLine";
+        line.style.left = `${leftPct}%`;
+        area.appendChild(line);
+      }
+
+      // bar
+      const bar = document.createElement("div");
+      const pr = (t.priority || "med").toLowerCase();
+      bar.className = "gBar " + (t.status || "todo") + " prio-" + pr;
+
+      const ls = Math.max(fromD, s);
+      const le = Math.min(toD, e);
+
+      const leftPct = ((ls - fromD) / span) * 100;
+      const rightPct = ((le - fromD + 1) / span) * 100; // include end day
+      const widthPct = Math.max(0.5, rightPct - leftPct);
+
+      bar.style.left = `${leftPct}%`;
+      bar.style.width = `${widthPct}%`;
+      bar.title = `#${t.id} ${t.name} (${it.start}~${it.due})`;
+      bar.onclick = ()=> openModalFromTask(t);
+
+      area.appendChild(bar);
+      wrap.appendChild(row);
+    });
+
+    const summary = document.getElementById("gSummary");
+    summary.textContent = `표시 범위: ${from} ~ ${to} (총 ${toD-fromD+1}일) · 항목 수: ${shown}`;
+  }
+
+  document.getElementById("btnGAuto").onclick = ()=>{
+    const items = TASKS.filter(t => fmtISODate(t.due_date));
+    const rng = autoGanttRange(items);
+    document.getElementById("gFrom").value = rng.from;
+    document.getElementById("gTo").value = rng.to;
+    renderGantt();
+  };
+
+  document.getElementById("gFrom").onchange = renderGantt;
+  document.getElementById("gTo").onchange = renderGantt;
+
+  // -----------------------
+  // People View
+  // -----------------------
+  function fillPeopleViewSelect(){
+    const sel = document.getElementById("pvPerson");
+    if(!sel) return;
+    sel.innerHTML = "";
+
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "— 사람 선택 —";
+    sel.appendChild(opt0);
+
+    PEOPLE.forEach(p=>{
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.affiliation ? `${p.name} (${p.affiliation})` : p.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function renderPeopleView(){
+    const box = document.getElementById("pvBox");
+    const sel = document.getElementById("pvPerson");
+    if(!box || !sel) return;
+
+    const pid = sel.value;
+    if(!pid){
+      box.innerHTML = `<div class="muted">사람을 선택하면 할당된 작업과 due 일정이 표시됩니다.</div>`;
+      return;
+    }
+
+    // 해당 사람에게 할당된 task 찾기: assignments 조회를 TASKS에 대해 캐시 기반으로
+    const targetId = Number(pid);
+    const rows = [];
+
+    // assignments는 task별로 server 호출이므로, MVP에서는 이미 hydrateAssignees로 "마지막 할당자"만 캐시됨.
+    // 그래서 여기서는 정확도를 위해 "task별 assignments"를 다시 한번 불러와서 필터
+    const tasks = TASKS.slice().sort((a,b)=> (a.id||0)-(b.id||0));
+    for(const t of tasks){
+      const assigns = await fetchAssignments(t.id);
+      if(!assigns || assigns.length === 0) continue;
+      // 마지막 할당 기준
+      assigns.sort((a,b)=> (a.id||0)-(b.id||0));
+      const a = assigns[assigns.length-1];
+      if(Number(a.person_id) === targetId){
+        rows.push({
+          task: t,
+          assignee: `${a.name}(${a.role_label || a.responsibility || ""})`
+        });
+      }
+    }
+
+    if(rows.length === 0){
+      box.innerHTML = `<div class="muted">할당된 작업이 없습니다.</div>`;
+      return;
+    }
+
+    // due 정렬: due 없으면 뒤로
+    rows.sort((x,y)=>{
+      const dx = fmtISODate(x.task.due_date) || "9999-12-31";
+      const dy = fmtISODate(y.task.due_date) || "9999-12-31";
+      if(dx !== dy) return dx < dy ? -1 : 1;
+      return (x.task.id||0)-(y.task.id||0);
+    });
+
+    const html = rows.map(r=>{
+      const t = r.task;
+      const start = fmtISODate(t.start_date);
+      const due = fmtISODate(t.due_date);
+
+      return `
+        <div class="card" style="margin-bottom:10px;">
+          <div class="title">
+            #${esc(t.id)} [${esc(t.task_group)}] ${esc(t.name)} ${prioPill(t.priority)}
+          </div>
+          <div class="meta">
+            assignee: ${esc(r.assignee)}
+            \nstatus: ${esc(t.status)} · priority: ${esc(t.priority)}
+            ${start ? `\nstart: ${esc(start)}` : ""}
+            \n${due ? `due: ${esc(due)}` : "due: 없음"}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    box.innerHTML = html;
+  }
+
+  document.getElementById("pvPerson").onchange = renderPeopleView;
+  document.getElementById("btnPvReload").onclick = refreshAll;
+
+  // -----------------------
+  // Admin: delete conference (password prompt)
+  // -----------------------
+  document.getElementById("btnDeleteConf").onclick = async ()=>{
+    if(!CURRENT_CONF_ID || !CURRENT_CONF){
+      alert("삭제할 학회를 선택하세요.");
+      return;
+    }
+
+    const pw = prompt("관리자 암호를 입력하세요:");
+    if(!pw) return;
+
+    if(!confirm(
+      `정말 삭제할까요?\n${CURRENT_CONF.year} - ${CURRENT_CONF.name}\n` +
+      `(관련 작업/마일스톤/배정/감사로그도 함께 삭제됩니다)`
+    )){
+      return;
+    }
+
+    try{
+      await apiDelete(`/conferences/${CURRENT_CONF_ID}`, {
+        "X-Admin-Password": pw
+      });
+
+      alert("삭제 완료");
+      CURRENT_CONF_ID = null;
+      CURRENT_CONF = null;
+      await loadConferences();
+      await refreshAll();
+    }catch(e){
+      alert("삭제 실패: " + e.message);
+    }
+  };
+
+  // -----------------------
   // Buttons / Init
   // -----------------------
   document.getElementById("btnCreate").onclick = async ()=>{
+    const year = 2026;
+    const name = "대한기계학회 IT지능융합부문 춘계학술대회";
+
     try{
       const conf = await apiPost("/conferences", {
-        year: 2026,
-        name: "대한기계학회 IT지능융합부문 춘계학술대회",
+        year,
+        name,
         theme: "TBD",
         start_date: "2026-04-08",
         end_date: "2026-04-10",
@@ -1016,11 +1807,22 @@
         status: "planning"
       });
 
-      await apiPost(`/conferences/${conf.id}/milestones/generate?create_default_tasks=true`, {});
+      await apiPost(
+        `/conferences/${conf.id}/milestones/generate?create_default_tasks=true`,
+        {}
+      );
+
       await loadConferences();
       document.getElementById("selConf").value = String(conf.id);
       CURRENT_CONF_ID = conf.id;
+      CURRENT_CONF = conf;
+
+      // ✅ 간트 입력 초기화 (새 학회 생성 후 auto range 재계산되게)
+      document.getElementById("gFrom").value = "";
+      document.getElementById("gTo").value = "";
+
       await refreshAll();
+
       alert("생성 완료!");
     }catch(e){
       alert("생성 실패: " + e.message);
@@ -1031,6 +1833,17 @@
 
   document.getElementById("selConf").onchange = async (ev)=>{
     CURRENT_CONF_ID = Number(ev.target.value);
+    try{
+      const cons = await apiGet("/conferences");
+      CURRENT_CONF = cons.find(x=> String(x.id)===String(CURRENT_CONF_ID)) || null;
+    }catch(e){
+      CURRENT_CONF = null;
+    }
+
+    // ✅ 학회 바꾸면 간트 범위 새로 자동 계산되게
+    document.getElementById("gFrom").value = "";
+    document.getElementById("gTo").value = "";
+
     await refreshAll();
   };
 

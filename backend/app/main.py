@@ -1,3 +1,6 @@
+import os
+from fastapi import Header
+
 from datetime import date, timedelta, datetime
 from typing import Optional, List, Dict, Any
 
@@ -11,7 +14,19 @@ from .models import Conference, Task, Milestone, Person, Assignment, AuditLog, R
 from .templates import MILESTONE_TEMPLATE, DEFAULT_TASKS
 
 import json
+from dotenv import load_dotenv
 
+load_dotenv(override=True)  # ✅ main.py 맨 위쪽(전역)에 1번만
+
+def get_admin_password() -> str:
+    return (os.getenv("ADMIN_PASSWORD") or "").strip()
+
+def require_admin(got_pw: str | None):
+    expected = get_admin_password()
+    if not expected:
+        raise HTTPException(500, "ADMIN_PASSWORD is not set on server (.env not loaded)")
+    if not got_pw or got_pw.strip() != expected:
+        raise HTTPException(401, "Invalid admin password")
 
 def to_date_obj(v):
     if v is None:
@@ -22,7 +37,6 @@ def to_date_obj(v):
         # "YYYY-MM-DD"
         return date.fromisoformat(v[:10])
     raise ValueError("Invalid date value")
-
 
 def sanitize_for_json(obj):
     """
@@ -183,9 +197,27 @@ def delete_role_template(rid: int, session: Session = Depends(get_session)):
 # -----------------------
 @app.post("/conferences", response_model=Conference)
 def create_conference(payload: dict, session: Session = Depends(get_session)):
+    year = payload["year"]
+    name = payload["name"]
+
+    # ✅ 1) 중복 체크
+    exists = session.exec(
+        select(Conference).where(
+            Conference.year == year,
+            Conference.name == name
+        )
+    ).first()
+
+    if exists:
+        raise HTTPException(
+            status_code=409,
+            detail="Conference already exists"
+        )
+
+    # ✅ 2) 생성
     conf = Conference(
-        year=payload["year"],
-        name=payload["name"],
+        year=year,
+        name=name,
         theme=payload.get("theme"),
         start_date=to_date_obj(payload["start_date"]),
         end_date=to_date_obj(payload["end_date"]),
@@ -200,7 +232,7 @@ def create_conference(payload: dict, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(conf)
 
-    # ✅ 역할 템플릿 기본 시드 (없으면 넣기)
+    # 역할 템플릿 시드
     seed_role_templates(session)
 
     return conf
@@ -218,6 +250,46 @@ def get_conference(cid: int, session: Session = Depends(get_session)):
         raise HTTPException(404, "Conference not found")
     return conf
 
+@app.delete("/conferences/{cid}")
+def delete_conference(
+    cid: int,
+    session: Session = Depends(get_session),
+    admin_pw: str | None = Header(default=None, alias="X-Admin-Password"),
+):
+    require_admin(admin_pw)
+
+    conf = session.get(Conference, cid)
+    if not conf:
+        raise HTTPException(404, "Conference not found")
+
+    # tasks
+    tasks = session.exec(select(Task).where(Task.conference_id == cid)).all()
+    task_ids = [t.id for t in tasks]
+
+    # assignments
+    if task_ids:
+        assigns = session.exec(select(Assignment).where(Assignment.task_id.in_(task_ids))).all()
+        for a in assigns:
+            session.delete(a)
+
+    # milestones
+    miles = session.exec(select(Milestone).where(Milestone.conference_id == cid)).all()
+    for m in miles:
+        session.delete(m)
+
+    # audit logs
+    logs = session.exec(select(AuditLog).where(AuditLog.conference_id == cid)).all()
+    for l in logs:
+        session.delete(l)
+
+    # tasks
+    for t in tasks:
+        session.delete(t)
+
+    # conference
+    session.delete(conf)
+    session.commit()
+    return {"ok": True}
 
 # -----------------------
 # People
