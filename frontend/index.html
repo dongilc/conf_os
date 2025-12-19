@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Conference OS (MVP) - Kanban</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 18px; }
+    h1 { margin: 0 0 10px 0; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .bar { margin: 10px 0; }
+    button { cursor:pointer; }
+    select, input, textarea { padding:6px; font-size:14px; }
+    .hint { color:#666; font-size:12px; }
+    .divider{ height:1px; background:#eee; margin:10px 0; }
+
+    .tabs { display:flex; gap:8px; margin: 10px 0 0 0; }
+    .tabbtn {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 999px;
+      background: #fafafa;
+      font-weight: 700;
+    }
+    .tabbtn.active { background:#fff; border-color:#bbb; }
+    .panel { display:none; margin-top: 12px; }
+    .panel.active { display:block; }
+
+    .board { display:flex; gap:14px; margin-top:14px; }
+    .col {
+      flex: 1;
+      min-width: 260px;
+      border: 1px solid #e6e6e6;
+      border-radius: 10px;
+      padding: 10px;
+      background:#fafafa;
+    }
+    .col h2 { margin:0 0 10px 0; font-size:18px; }
+    .dropzone { min-height: 60vh; }
+
+    .card{
+      background:#fff;
+      border:1px solid #e6e6e6;
+      border-radius:12px;
+      padding:10px;
+      margin-bottom:10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .card:hover{ border-color:#cfcfcf; }
+    .card .title{ font-weight:700; font-size:14px; margin-bottom:6px; }
+    .card .meta{ font-size:12px; color:#444; line-height:1.5; white-space:pre-wrap; }
+
+    .pill{
+      display:inline-block;
+      font-size:11px;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      margin-left:6px;
+      vertical-align:middle;
+      font-weight:700;
+    }
+    .pill.high{ border-color:#ffb4b4; }
+    .pill.med{ border-color:#ffe1a6; }
+    .pill.low{ border-color:#bfe7bf; }
+
+    .due-none { color:#9a9a9a; }
+    .due-soon { color:#7a5d00; font-weight:700; }
+    .due-over { color:#b00020; font-weight:800; }
+
+    /* Modal */
+    .modal-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,0.35);
+      display:none; align-items:center; justify-content:center; z-index:1000;
+    }
+    .modal{
+      width:min(980px, 96vw);
+      background:#fff;
+      border-radius:14px;
+      padding:14px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.2);
+    }
+    .modal h3{ margin:0 0 10px 0; }
+    .modal .grid{
+      display:grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap:10px;
+    }
+    .modal label{ display:block; font-size:12px; color:#333; margin-bottom:4px; }
+    .modal .full{ grid-column: 1 / -1; }
+    .modal textarea{ width:100%; min-height: 90px; }
+
+    /* ✅ 제목칸 너무 길지 않게 (요청) */
+    #fName { width:100%; max-width: 520px; }
+
+    .modal .footer{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+    .muted { color:#777; font-size:12px; }
+    .danger { color:#b00020; font-size:12px; }
+
+    .auditBox{
+      display:none;
+      margin-top:8px;
+      padding:8px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      background:#fafafa;
+    }
+    .auditItem{
+      padding:6px 4px;
+      border-bottom:1px solid #eee;
+      font-size:12px;
+      line-height:1.35;
+    }
+    .auditItem:last-child{ border-bottom:none; }
+
+    .prioHint{
+      display:inline-block;
+      font-size:12px;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      margin-left:8px;
+      color:#333;
+      background:#fafafa;
+    }
+    .prioHint.high{ border-color:#ffb4b4; }
+    .prioHint.med{ border-color:#ffe1a6; }
+    .prioHint.low{ border-color:#bfe7bf; }
+
+    /* Tables (People/RoleTemplates) */
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border:1px solid #e6e6e6; padding:8px; font-size:13px; vertical-align: top; }
+    th { background:#fafafa; text-align:left; }
+    .small { font-size:12px; color:#666; }
+    .w120 { width:120px; }
+    .w160 { width:160px; }
+    .w200 { width:200px; }
+    .w260 { width:260px; }
+    .actions { display:flex; gap:6px; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+  <h1>Conference OS (MVP)</h1>
+
+  <div class="row bar">
+    <button id="btnCreate">1) 2026 학회 생성 + 마일스톤/기본업무 생성</button>
+    <button id="btnReload">2) 불러오기</button>
+
+    <span class="hint">Conference:</span>
+    <select id="selConf"></select>
+  </div>
+
+  <div class="row bar">
+    <span class="hint">빠른 상태 변경(PATCH):</span>
+    <input id="quickTaskId" placeholder="Task ID" style="width:90px">
+    <select id="quickStatus">
+      <option value="todo">todo</option>
+      <option value="doing">doing</option>
+      <option value="done">done</option>
+      <option value="blocked">blocked</option>
+    </select>
+    <button id="btnQuickPatch">상태 변경</button>
+    <span class="hint">(보통은 드래그로 바꾸면 됨)</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tabbtn active" data-tab="kanban">칸반</button>
+    <button class="tabbtn" data-tab="people">사람 관리</button>
+    <button class="tabbtn" data-tab="roles">역할 템플릿</button>
+  </div>
+
+  <!-- ===================== -->
+  <!-- Kanban Panel -->
+  <!-- ===================== -->
+  <div id="panel-kanban" class="panel active">
+    <div class="board">
+      <div class="col">
+        <h2>Todo</h2>
+        <div id="colTodo" class="dropzone" data-status="todo"></div>
+      </div>
+      <div class="col">
+        <h2>Doing</h2>
+        <div id="colDoing" class="dropzone" data-status="doing"></div>
+      </div>
+      <div class="col">
+        <h2>Done</h2>
+        <div id="colDone" class="dropzone" data-status="done"></div>
+      </div>
+      <div class="col">
+        <h2>Blocked</h2>
+        <div id="colBlocked" class="dropzone" data-status="blocked"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== -->
+  <!-- People Panel -->
+  <!-- ===================== -->
+  <div id="panel-people" class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <b>사람 관리</b>
+        <div class="small">추가/수정/삭제 · 담당자 드롭다운에 반영됩니다.</div>
+      </div>
+      <div class="row">
+        <button id="btnPeopleReload">새로고침</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row" style="align-items:flex-end;">
+      <div>
+        <label class="small">이름</label>
+        <input id="newPersonName" placeholder="예: 최동일" class="w200"/>
+      </div>
+      <div>
+        <label class="small">소속</label>
+        <input id="newPersonAff" placeholder="예: 명지대학교" class="w260"/>
+      </div>
+      <div>
+        <label class="small">직함(선택)</label>
+        <input id="newPersonTitle" placeholder="예: 조직위원장" class="w200"/>
+      </div>
+      <button id="btnAddPerson">사람 추가</button>
+      <div id="peopleErr" class="danger"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="w120">ID</th>
+          <th>이름</th>
+          <th>소속</th>
+          <th class="w200">직함</th>
+          <th class="w200">작업</th>
+        </tr>
+      </thead>
+      <tbody id="peopleTbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ===================== -->
+  <!-- Role Templates Panel -->
+  <!-- ===================== -->
+  <div id="panel-roles" class="panel">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <b>역할 템플릿</b>
+        <div class="small">작업 담당(Assignment)의 responsibility에 저장되는 “역할 키”와 표시 라벨을 관리합니다.</div>
+      </div>
+      <div class="row">
+        <button id="btnRolesSeed">기본 템플릿 시드</button>
+        <button id="btnRolesReload">새로고침</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="row" style="align-items:flex-end;">
+      <div>
+        <label class="small">역할 키(key)</label>
+        <input id="newRoleKey" placeholder="예: chair" class="w200"/>
+      </div>
+      <div>
+        <label class="small">표시 라벨(label)</label>
+        <input id="newRoleLabel" placeholder="예: 조직위원장" class="w200"/>
+      </div>
+      <div>
+        <label class="small">정렬(sort_order)</label>
+        <input id="newRoleOrder" placeholder="예: 10" class="w120"/>
+      </div>
+      <button id="btnAddRole">추가</button>
+      <div id="rolesErr" class="danger"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="w120">ID</th>
+          <th class="w200">key</th>
+          <th>label</th>
+          <th class="w120">sort</th>
+          <th class="w200">작업</th>
+        </tr>
+      </thead>
+      <tbody id="rolesTbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ===================== -->
+  <!-- Task Edit Modal -->
+  <!-- ===================== -->
+  <div id="backdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="row" style="justify-content:space-between;">
+        <h3 id="mTitle">작업 편집</h3>
+        <button id="btnClose">닫기</button>
+      </div>
+
+      <div class="muted" id="mSub"></div>
+      <div class="divider"></div>
+
+      <div class="grid">
+        <div>
+          <label>제목 (Todo에서는 제목 위주)</label>
+          <input id="fName" />
+        </div>
+        <div>
+          <label>그룹</label>
+          <select id="fGroup">
+            <option value="PLAN">기획/조직</option>
+            <option value="CFP_PR">CFP/홍보</option>
+            <option value="PAPER">논문/심사</option>
+            <option value="PROGRAM">프로그램</option>
+            <option value="PROCEEDINGS">논문집/프로시딩</option>
+            <option value="SPONSOR_EXHIBIT">후원/전시</option>
+            <option value="OPS_ONSITE">현장운영</option>
+            <option value="STAFF_HELPER">스태프/도우미</option>
+            <option value="FINANCE">재정/예산</option>
+            <option value="POST">사후정산/보고</option>
+            <option value="ETC">기타</option>
+          </select>
+        </div>
+
+        <div class="full">
+          <label>설명/노트</label>
+          <textarea id="fDesc"></textarea>
+        </div>
+
+        <div>
+          <label>상태</label>
+          <select id="fStatus">
+            <option value="todo">todo</option>
+            <option value="doing">doing</option>
+            <option value="done">done</option>
+            <option value="blocked">blocked</option>
+          </select>
+        </div>
+
+        <div>
+          <label>우선순위 <span id="prioHint" class="prioHint med">med</span></label>
+          <select id="fPriority">
+            <option value="low">low</option>
+            <option value="med">med</option>
+            <option value="high">high</option>
+          </select>
+        </div>
+
+        <div>
+          <label>시작일</label>
+          <input id="fStart" type="date"/>
+        </div>
+        <div>
+          <label>마감일</label>
+          <input id="fDue" type="date"/>
+        </div>
+
+        <div>
+          <label>담당자</label>
+          <select id="fPerson"></select>
+        </div>
+        <div>
+          <label>역할(템플릿)</label>
+          <select id="fRole"></select>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row" style="justify-content:space-between;">
+        <div class="muted">변경 이력(Audit)</div>
+        <button id="btnToggleAudit" type="button">변경 이력 보기</button>
+      </div>
+      <div id="auditBox" class="auditBox">
+        <div id="auditList"></div>
+      </div>
+
+      <div class="footer">
+        <div class="danger" id="mErr" style="margin-right:auto;"></div>
+        <button id="btnSave">저장</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const API = "http://127.0.0.1:8000";
+
+  let CURRENT_CONF_ID = null;
+  let TASKS = [];
+  let PEOPLE = [];
+  let ROLES = []; // role templates
+  const ASSIGNEE_CACHE = new Map();
+  let MODAL_TASK = null;
+
+  function esc(s){
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
+  }
+
+  function fmtISODate(d){
+    if(!d) return "";
+    return String(d).slice(0,10);
+  }
+
+  function fmtKST(iso){
+    if(!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleString();
+  }
+
+  function prioPill(p){
+    const cls = (p || "med").toLowerCase();
+    return `<span class="pill ${cls}">${esc(cls)}</span>`;
+  }
+
+  function todayYMD(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${dd}`;
+  }
+
+  function diffDays(ymd){
+    const a = new Date(ymd + "T00:00:00");
+    const b = new Date(todayYMD() + "T00:00:00");
+    const ms = a.getTime() - b.getTime();
+    return Math.round(ms / (1000*60*60*24));
+  }
+
+  function dueLine(due){
+    if(!due){
+      return `<span class="due-none">due: 없음</span>`;
+    }
+    const dd = diffDays(due);
+    if(dd < 0){
+      return `<span class="due-over">due: ${esc(due)} · ⚠ overdue</span>`;
+    }
+    if(dd <= 3){
+      return `<span class="due-soon">due: ${esc(due)} · ⏳ D-${dd}</span>`;
+    }
+    return `due: ${esc(due)}`;
+  }
+
+  async function apiGet(path){
+    const r = await fetch(`${API}${path}`);
+    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return await r.json();
+  }
+
+  async function apiPost(path, body){
+    const r = await fetch(`${API}${path}`, {
+      method:"POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return await r.json();
+  }
+
+  async function apiPatch(path, body){
+    const r = await fetch(`${API}${path}`, {
+      method:"PATCH",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return await r.json();
+  }
+
+  async function apiDelete(path){
+    const r = await fetch(`${API}${path}`, { method:"DELETE" });
+    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return await r.json();
+  }
+
+  // -----------------------
+  // Tabs
+  // -----------------------
+  function setActiveTab(name){
+    document.querySelectorAll(".tabbtn").forEach(b=>{
+      b.classList.toggle("active", b.dataset.tab === name);
+    });
+    document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+    document.getElementById(`panel-${name}`).classList.add("active");
+  }
+
+  document.querySelectorAll(".tabbtn").forEach(b=>{
+    b.addEventListener("click", ()=> setActiveTab(b.dataset.tab));
+  });
+
+  // -----------------------
+  // Loaders
+  // -----------------------
+  async function loadConferences(){
+    const cons = await apiGet("/conferences");
+    const sel = document.getElementById("selConf");
+    sel.innerHTML = "";
+    cons.forEach(c=>{
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = `${c.year} - ${c.name}`;
+      sel.appendChild(opt);
+    });
+    if(cons.length){
+      CURRENT_CONF_ID = cons[0].id;
+      sel.value = String(CURRENT_CONF_ID);
+    }
+  }
+
+  async function loadPeople(){
+    PEOPLE = await apiGet("/people");
+  }
+
+  async function loadRoles(){
+    ROLES = await apiGet("/role-templates");
+  }
+
+  async function fetchAssignments(taskId){
+    try{
+      const r = await fetch(`${API}/tasks/${taskId}/assignments`);
+      if(!r.ok) return [];
+      return await r.json();
+    }catch(e){
+      return [];
+    }
+  }
+
+  async function hydrateAssignees(tasks){
+    const promises = tasks.map(async (t)=>{
+      try{
+        const assigns = await fetchAssignments(t.id);
+        if(!assigns || assigns.length === 0){
+          ASSIGNEE_CACHE.set(t.id, "");
+          return;
+        }
+        // ✅ 여러 개 쌓일 수 있으니 "가장 마지막"을 표시
+        assigns.sort((a,b)=> (a.id||0) - (b.id||0));
+        const a = assigns[assigns.length - 1];
+
+        const roleLabel = a.role_label || a.responsibility || "";
+        ASSIGNEE_CACHE.set(t.id, `${a.name}(${roleLabel})`);
+      }catch(e){
+        ASSIGNEE_CACHE.set(t.id, "");
+      }
+    });
+    await Promise.all(promises);
+  }
+
+  async function loadTasks(){
+    if(!CURRENT_CONF_ID) return;
+    TASKS = await apiGet(`/conferences/${CURRENT_CONF_ID}/tasks`);
+    await hydrateAssignees(TASKS);
+  }
+
+  async function refreshAll(){
+    await loadRoles();
+    await loadPeople();
+    await loadTasks();
+    renderBoard();
+    renderPeopleTable();
+    renderRoleTable();
+  }
+
+  // -----------------------
+  // People UI
+  // -----------------------
+  function renderPeopleTable(){
+    const tb = document.getElementById("peopleTbody");
+    tb.innerHTML = "";
+
+    PEOPLE.forEach(p=>{
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>${esc(p.id)}</td>
+        <td><input data-k="name" value="${esc(p.name||"")}" style="width:100%"></td>
+        <td><input data-k="affiliation" value="${esc(p.affiliation||"")}" style="width:100%"></td>
+        <td><input data-k="role_title" value="${esc(p.role_title||"")}" style="width:100%"></td>
+        <td>
+          <div class="actions">
+            <button data-act="save">저장</button>
+            <button data-act="del">삭제</button>
+          </div>
+        </td>
+      `;
+
+      tr.querySelector('[data-act="save"]').onclick = async ()=>{
+        try{
+          const body = {};
+          tr.querySelectorAll("input[data-k]").forEach(inp=>{
+            body[inp.dataset.k] = inp.value;
+          });
+          await apiPatch(`/people/${p.id}`, body);
+          document.getElementById("peopleErr").textContent = "";
+          await refreshAll();
+        }catch(e){
+          document.getElementById("peopleErr").textContent = "사람 저장 실패: " + e.message;
+        }
+      };
+
+      tr.querySelector('[data-act="del"]').onclick = async ()=>{
+        if(!confirm(`삭제할까요? (ID ${p.id})`)) return;
+        try{
+          await apiDelete(`/people/${p.id}`);
+          document.getElementById("peopleErr").textContent = "";
+          await refreshAll();
+        }catch(e){
+          document.getElementById("peopleErr").textContent = "사람 삭제 실패: " + e.message;
+        }
+      };
+
+      tb.appendChild(tr);
+    });
+  }
+
+  document.getElementById("btnAddPerson").onclick = async ()=>{
+    const name = document.getElementById("newPersonName").value.trim();
+    const aff  = document.getElementById("newPersonAff").value.trim();
+    const title= document.getElementById("newPersonTitle").value.trim();
+    if(!name){
+      document.getElementById("peopleErr").textContent = "이름은 필수입니다.";
+      return;
+    }
+    try{
+      await apiPost("/people", {
+        name,
+        affiliation: aff || null,
+        role_title: title || null
+      });
+      document.getElementById("newPersonName").value = "";
+      document.getElementById("newPersonAff").value = "";
+      document.getElementById("newPersonTitle").value = "";
+      document.getElementById("peopleErr").textContent = "";
+      await refreshAll();
+    }catch(e){
+      document.getElementById("peopleErr").textContent = "사람 추가 실패: " + e.message;
+    }
+  };
+
+  document.getElementById("btnPeopleReload").onclick = async ()=>{ await refreshAll(); };
+
+  // -----------------------
+  // Role Templates UI
+  // -----------------------
+  function renderRoleTable(){
+    const tb = document.getElementById("rolesTbody");
+    tb.innerHTML = "";
+
+    ROLES.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(r.id)}</td>
+        <td><input data-k="key" value="${esc(r.key||"")}" style="width:100%"></td>
+        <td><input data-k="label" value="${esc(r.label||"")}" style="width:100%"></td>
+        <td><input data-k="sort_order" value="${esc(r.sort_order ?? 100)}" style="width:100%"></td>
+        <td>
+          <div class="actions">
+            <button data-act="save">저장</button>
+            <button data-act="del">삭제</button>
+          </div>
+        </td>
+      `;
+
+      tr.querySelector('[data-act="save"]').onclick = async ()=>{
+        try{
+          const body = {};
+          tr.querySelectorAll("input[data-k]").forEach(inp=>{
+            const k = inp.dataset.k;
+            body[k] = (k === "sort_order") ? Number(inp.value || 100) : inp.value;
+          });
+          await apiPatch(`/role-templates/${r.id}`, body);
+          document.getElementById("rolesErr").textContent = "";
+          await refreshAll();
+        }catch(e){
+          document.getElementById("rolesErr").textContent = "역할 저장 실패: " + e.message;
+        }
+      };
+
+      tr.querySelector('[data-act="del"]').onclick = async ()=>{
+        if(!confirm(`삭제할까요? (ID ${r.id})`)) return;
+        try{
+          await apiDelete(`/role-templates/${r.id}`);
+          document.getElementById("rolesErr").textContent = "";
+          await refreshAll();
+        }catch(e){
+          document.getElementById("rolesErr").textContent = "역할 삭제 실패: " + e.message;
+        }
+      };
+
+      tb.appendChild(tr);
+    });
+  }
+
+  document.getElementById("btnRolesReload").onclick = async ()=>{ await refreshAll(); };
+
+  document.getElementById("btnRolesSeed").onclick = async ()=>{
+    try{
+      await apiPost("/role-templates/seed", {});
+      document.getElementById("rolesErr").textContent = "";
+      await refreshAll();
+    }catch(e){
+      document.getElementById("rolesErr").textContent = "시드 실패: " + e.message;
+    }
+  };
+
+  document.getElementById("btnAddRole").onclick = async ()=>{
+    const key = document.getElementById("newRoleKey").value.trim();
+    const label = document.getElementById("newRoleLabel").value.trim();
+    const order = Number(document.getElementById("newRoleOrder").value || 100);
+
+    if(!key || !label){
+      document.getElementById("rolesErr").textContent = "key/label은 필수입니다.";
+      return;
+    }
+
+    try{
+      await apiPost("/role-templates", { key, label, sort_order: order });
+      document.getElementById("newRoleKey").value = "";
+      document.getElementById("newRoleLabel").value = "";
+      document.getElementById("newRoleOrder").value = "";
+      document.getElementById("rolesErr").textContent = "";
+      await refreshAll();
+    }catch(e){
+      document.getElementById("rolesErr").textContent = "역할 추가 실패: " + e.message;
+    }
+  };
+
+  // -----------------------
+  // Board render
+  // -----------------------
+  function clearBoard(){
+    ["colTodo","colDoing","colDone","colBlocked"].forEach(id=>{
+      document.getElementById(id).innerHTML = "";
+    });
+  }
+
+  function addCard(container, t){
+    const div = document.createElement("div");
+    div.className = "card";
+    div.draggable = true;
+    div.dataset.taskId = t.id;
+
+    const ass = ASSIGNEE_CACHE.get(t.id) || "";
+    const start = fmtISODate(t.start_date);
+    const due = fmtISODate(t.due_date);
+
+    const metaLines = [];
+    metaLines.push(`status: ${t.status} · priority: ${t.priority}`);
+    if(start) metaLines.push(`start: ${start}`);
+    metaLines.push(dueLine(due));
+    if(ass) metaLines.push(`assignee: ${ass}`);
+    if(t.description) metaLines.push(`note: ${t.description}`);
+
+    div.innerHTML = `
+      <div class="title">#${t.id} [${esc(t.task_group)}] ${esc(t.name)} ${prioPill(t.priority)}</div>
+      <div class="meta">${metaLines.join("\n")}</div>
+    `;
+
+    div.addEventListener("dragstart", (ev)=>{
+      ev.dataTransfer.setData("text/plain", String(t.id));
+    });
+
+    div.addEventListener("click", ()=>{
+      openModalFromTask(t);
+    });
+
+    container.appendChild(div);
+  }
+
+  function renderBoard(){
+    clearBoard();
+
+    const map = {
+      todo: document.getElementById("colTodo"),
+      doing: document.getElementById("colDoing"),
+      done: document.getElementById("colDone"),
+      blocked: document.getElementById("colBlocked"),
+    };
+
+    TASKS.forEach(t=>{
+      const col = map[t.status] || map.todo;
+      addCard(col, t);
+    });
+  }
+
+  function setupDropzones(){
+    document.querySelectorAll(".dropzone").forEach(z=>{
+      z.addEventListener("dragover", (ev)=> ev.preventDefault());
+      z.addEventListener("drop", async (ev)=>{
+        ev.preventDefault();
+        const taskId = ev.dataTransfer.getData("text/plain");
+        const newStatus = z.dataset.status;
+        try{
+          await apiPatch(`/tasks/${taskId}`, {status:newStatus});
+          await refreshAll();
+        }catch(e){
+          alert("상태 변경 실패: " + e.message);
+        }
+      });
+    });
+  }
+
+  // -----------------------
+  // Modal helpers
+  // -----------------------
+  function showModal(on){
+    document.getElementById("backdrop").style.display = on ? "flex" : "none";
+  }
+
+  function fillPeopleSelect(){
+    const sel = document.getElementById("fPerson");
+    sel.innerHTML = "";
+
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "— 담당자 배정 안 함 —";
+    sel.appendChild(opt0);
+
+    PEOPLE.forEach(p=>{
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.affiliation ? `${p.name} (${p.affiliation})` : p.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  function fillRoleSelect(){
+    const sel = document.getElementById("fRole");
+    sel.innerHTML = "";
+
+    if(!ROLES || ROLES.length === 0){
+      const opt = document.createElement("option");
+      opt.value = "chair";
+      opt.textContent = "조직위원장";
+      sel.appendChild(opt);
+      return;
+    }
+
+    ROLES
+      .slice()
+      .sort((a,b)=> (a.sort_order ?? 100) - (b.sort_order ?? 100))
+      .forEach(r=>{
+        const opt = document.createElement("option");
+        opt.value = r.key;
+        opt.textContent = r.label;
+        sel.appendChild(opt);
+      });
+  }
+
+  async function setModalAssigneeDefaults(taskId){
+    const selPerson = document.getElementById("fPerson");
+    const selRole   = document.getElementById("fRole");
+
+    const assigns = await fetchAssignments(taskId);
+    if(!assigns || assigns.length === 0){
+      selPerson.value = "";
+      // 첫번째 템플릿 기본
+      selRole.value = (ROLES?.[0]?.key) || "chair";
+      return;
+    }
+    assigns.sort((a,b)=> (a.id||0) - (b.id||0));
+    const a = assigns[assigns.length - 1];
+    selPerson.value = String(a.person_id);
+    selRole.value = a.responsibility || (ROLES?.[0]?.key) || "chair";
+  }
+
+  function updatePriorityHint(){
+    const v = document.getElementById("fPriority").value || "med";
+    const h = document.getElementById("prioHint");
+    h.classList.remove("low","med","high");
+    h.classList.add(v);
+    h.textContent = v;
+  }
+
+  function applyStatusRules(status){
+    const isTodo = (status === "todo");
+
+    const lock = (id, v)=>{
+      const el = document.getElementById(id);
+      el.disabled = v;
+    };
+
+    lock("fPriority", isTodo);
+    lock("fStart", isTodo);
+    lock("fDue", isTodo);
+    lock("fPerson", isTodo);
+    lock("fRole", isTodo);
+    lock("fStatus", false);
+
+    const sub = document.getElementById("mSub");
+    sub.textContent = isTodo
+      ? "Todo 상태에서는 제목/설명 위주로 작성합니다. (담당자/날짜/우선순위는 Doing부터)"
+      : "Doing/Done/Blocked 상태에서는 우선순위/날짜/담당자/역할(템플릿)을 설정합니다.";
+  }
+
+  async function openModalFromTask(t){
+    MODAL_TASK = t;
+
+    document.getElementById("mTitle").textContent = `작업 편집 (#${t.id})`;
+    document.getElementById("mErr").textContent = "";
+
+    document.getElementById("fName").value = t.name || "";
+    document.getElementById("fGroup").value = t.task_group || "ETC";
+    document.getElementById("fDesc").value = t.description || "";
+    document.getElementById("fStatus").value = t.status || "todo";
+    document.getElementById("fPriority").value = t.priority || "med";
+    document.getElementById("fStart").value = fmtISODate(t.start_date);
+    document.getElementById("fDue").value = fmtISODate(t.due_date);
+
+    updatePriorityHint();
+
+    fillPeopleSelect();
+    fillRoleSelect();
+    await setModalAssigneeDefaults(t.id);
+
+    applyStatusRules(t.status);
+
+    document.getElementById("auditBox").style.display = "none";
+    document.getElementById("auditList").innerHTML = "";
+    loadTaskAudit(t.conference_id, t.id);
+
+    showModal(true);
+  }
+
+  async function loadTaskAudit(conferenceId, taskId){
+    const box = document.getElementById("auditList");
+    box.innerHTML = "불러오는 중...";
+
+    try{
+      const rows = await apiGet(`/conferences/${conferenceId}/audit?limit=200`);
+      const mine = rows.filter(x =>
+        x.entity_type === "task" && String(x.entity_id) === String(taskId)
+      );
+
+      if(mine.length === 0){
+        box.innerHTML = `<div class="auditItem">변경 이력이 없습니다.</div>`;
+        return;
+      }
+
+      mine.sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+
+      const html = mine.map(x=>{
+        const when = fmtKST(x.created_at);
+        const act = x.action || "update";
+        return `<div class="auditItem"><b>${esc(when)}</b> · ${esc(act)}</div>`;
+      }).join("");
+
+      box.innerHTML = html;
+    }catch(e){
+      box.innerHTML = `<div class="auditItem">이력을 불러오지 못했습니다.</div>`;
+    }
+  }
+
+  async function saveModal(){
+    const t = MODAL_TASK;
+    if(!t) return;
+
+    const status = document.getElementById("fStatus").value;
+    const payload = {
+      name: document.getElementById("fName").value.trim(),
+      task_group: document.getElementById("fGroup").value,
+      description: document.getElementById("fDesc").value.trim(),
+      status: status
+    };
+
+    if(status !== "todo"){
+      payload.priority = document.getElementById("fPriority").value;
+      payload.start_date = document.getElementById("fStart").value || null;
+      payload.due_date = document.getElementById("fDue").value || null;
+    }
+
+    const personId = document.getElementById("fPerson").value;
+    const roleKey = document.getElementById("fRole").value;
+
+    try{
+      await apiPatch(`/tasks/${t.id}`, payload);
+
+      if(status !== "todo"){
+        if(personId){
+          await apiPost(`/tasks/${t.id}/assign`, {
+            person_id: Number(personId),
+            responsibility: roleKey   // ✅ role key 저장
+          });
+        }
+      }
+
+      showModal(false);
+      await refreshAll();
+    }catch(e){
+      document.getElementById("mErr").textContent = "저장 실패: " + e.message;
+    }
+  }
+
+  // -----------------------
+  // Buttons / Init
+  // -----------------------
+  document.getElementById("btnCreate").onclick = async ()=>{
+    try{
+      const conf = await apiPost("/conferences", {
+        year: 2026,
+        name: "대한기계학회 IT지능융합부문 춘계학술대회",
+        theme: "TBD",
+        start_date: "2026-04-08",
+        end_date: "2026-04-10",
+        venue_name: "메종글래드 호텔",
+        venue_city: "제주",
+        timezone: "Asia/Seoul",
+        status: "planning"
+      });
+
+      await apiPost(`/conferences/${conf.id}/milestones/generate?create_default_tasks=true`, {});
+      await loadConferences();
+      document.getElementById("selConf").value = String(conf.id);
+      CURRENT_CONF_ID = conf.id;
+      await refreshAll();
+      alert("생성 완료!");
+    }catch(e){
+      alert("생성 실패: " + e.message);
+    }
+  };
+
+  document.getElementById("btnReload").onclick = async ()=>{ await refreshAll(); };
+
+  document.getElementById("selConf").onchange = async (ev)=>{
+    CURRENT_CONF_ID = Number(ev.target.value);
+    await refreshAll();
+  };
+
+  document.getElementById("btnQuickPatch").onclick = async ()=>{
+    const id = document.getElementById("quickTaskId").value.trim();
+    const st = document.getElementById("quickStatus").value;
+    if(!id) return;
+    try{
+      await apiPatch(`/tasks/${id}`, {status: st});
+      await refreshAll();
+    }catch(e){
+      alert("PATCH 실패: " + e.message);
+    }
+  };
+
+  document.getElementById("btnClose").onclick = ()=> showModal(false);
+  document.getElementById("btnSave").onclick = saveModal;
+
+  document.getElementById("fStatus").onchange = (ev)=> applyStatusRules(ev.target.value);
+  document.getElementById("fPriority").onchange = ()=> updatePriorityHint();
+
+  document.getElementById("btnToggleAudit").onclick = ()=>{
+    const box = document.getElementById("auditBox");
+    box.style.display = (box.style.display === "none") ? "block" : "none";
+  };
+
+  function setup(){
+    setupDropzones();
+  }
+
+  (async function init(){
+    setup();
+    await loadConferences();
+    await refreshAll();
+  })();
+</script>
+</body>
+</html>
