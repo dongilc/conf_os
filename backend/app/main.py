@@ -126,7 +126,6 @@ def list_role_templates(session: Session = Depends(get_session)):
     rows = session.exec(select(RoleTemplate).order_by(RoleTemplate.sort_order, RoleTemplate.label)).all()
     return rows
 
-
 @app.post("/role-templates", response_model=RoleTemplate)
 def create_role_template(body: dict, session: Session = Depends(get_session)):
     key = (body.get("key") or "").strip()
