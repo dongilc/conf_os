@@ -338,6 +338,17 @@
     .gBar.prio-high{ border-width:2px; border-color:#ff6b6b; }
     .gBar.prio-med{ border-width:2px; border-color:#ffb020; }
     .gBar.prio-low{ border-width:2px; border-color:#48b04d; }
+
+    /* PeopleView 내부 간트용 레이아웃 보강 */
+    .pvSplit{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:12px;
+    }
+    .pvSectionTitle{
+      font-weight:900;
+      margin: 6px 0;
+    }
   </style>
 </head>
 <body>
@@ -453,7 +464,7 @@
     <div class="row" style="justify-content:space-between;">
       <div>
         <b>사람별 보기</b>
-        <div class="small">특정 사람을 선택하면 그 사람에게 할당된 임무 + due 일정표를 보여줍니다.</div>
+        <div class="small">특정 사람을 선택하면 그 사람에게 할당된 임무 + (미니)간트 일정표를 보여줍니다.</div>
       </div>
     </div>
 
@@ -467,7 +478,29 @@
 
     <div class="divider"></div>
 
-    <div id="pvBox"></div>
+    <div class="pvSplit">
+      <div>
+        <div class="pvSectionTitle">할당된 Task 목록</div>
+        <div id="pvBox"></div>
+      </div>
+
+      <div>
+        <div class="pvSectionTitle">간트(해당 사람 기준)</div>
+        <div class="small">start~due 기준 · start 없으면 due-7일 자동 · Week tick / priority 색 반영</div>
+
+        <div class="gToolbar">
+          <span class="hint">기간:</span>
+          <input id="pvFrom" type="date"/>
+          <input id="pvTo" type="date"/>
+          <button id="btnPvGAuto">자동 범위</button>
+          <span class="hint">* due 없는 항목은 표시 제외</span>
+        </div>
+
+        <div id="pvAxis" class="gAxis"></div>
+        <div id="pvGantt" class="gWrap"></div>
+        <div class="muted" id="pvSummary"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ===================== -->
@@ -667,7 +700,7 @@
 <script>
   const API = "http://127.0.0.1:8000";
 
-  // ✅ 관리자 암호(프론트 MVP용) - 원하면 env/config로 옮기기
+  // (프론트 고정값) - 백엔드에서 X-Admin-Password 검증하는 구조로 이미 사용중
   const ADMIN_PASSWORD = "admin1234";
 
   let CURRENT_CONF_ID = null;
@@ -702,7 +735,7 @@
 
   function prioPill(p){
     const cls = (p || "med").toLowerCase();
-    return `<span class="pill ${cls}">${esc(cls)}</span>`;
+    return `<span class="pill ${esc(cls)}">${esc(cls)}</span>`;
   }
 
   function todayYMD(){
@@ -768,7 +801,7 @@
     if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
     return await r.json();
   }
-  
+
   // -----------------------
   // Tabs
   // -----------------------
@@ -779,7 +812,6 @@
     document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
     document.getElementById(`panel-${name}`).classList.add("active");
 
-    // 탭 들어갈 때 렌더 보강
     if(name === "calendar") renderCalendar();
     if(name === "gantt") renderGantt();
     if(name === "peopleview") renderPeopleView();
@@ -804,7 +836,6 @@
     });
 
     if(cons.length){
-      // 기존 선택 유지 시도
       let picked = cons[0];
       if(CURRENT_CONF_ID){
         const found = cons.find(x=> String(x.id)===String(CURRENT_CONF_ID));
@@ -818,7 +849,6 @@
       CURRENT_CONF = null;
     }
 
-    // calendar init default to current month
     if(CAL_Y === null || CAL_M === null){
       const now = new Date();
       CAL_Y = now.getFullYear();
@@ -1100,9 +1130,7 @@
       blocked: document.getElementById("colBlocked"),
     };
 
-    // ✅ todo는 id 오름차순, 나머지도 보기 좋게 id 오름차순
     const sorted = TASKS.slice().sort((a,b)=> (a.id||0) - (b.id||0));
-
     sorted.forEach(t=>{
       const col = map[t.status] || map.todo;
       addCard(col, t);
@@ -1332,13 +1360,12 @@
 
     const first = new Date(CAL_Y, CAL_M, 1);
     const last = new Date(CAL_Y, CAL_M+1, 0);
-    const startDow = first.getDay(); // 0 Sun
+    const startDow = first.getDay();
     const daysInMonth = last.getDate();
 
     title.textContent = `${CAL_Y}년 ${CAL_M+1}월`;
 
-    // due-date map
-    const dueMap = new Map(); // ymd => tasks[]
+    const dueMap = new Map();
     TASKS.forEach(t=>{
       const due = fmtISODate(t.due_date);
       if(!due) return;
@@ -1346,7 +1373,6 @@
       dueMap.get(due).push(t);
     });
 
-    // sort each day by id
     for(const [k, arr] of dueMap.entries()){
       arr.sort((a,b)=> (a.id||0) - (b.id||0));
     }
@@ -1361,7 +1387,6 @@
       grid.appendChild(div);
     });
 
-    // 6주 고정 느낌(월간)
     const totalCells = 42;
     const today = todayYMD();
 
@@ -1454,7 +1479,6 @@
   }
 
   function autoGanttRange(tasks){
-    // to 기본값: 학회 종료일 + 10
     let confEnd = null;
     if(CURRENT_CONF && CURRENT_CONF.end_date){
       confEnd = String(CURRENT_CONF.end_date).slice(0,10);
@@ -1489,31 +1513,27 @@
 
   function mondayOf(ymd){
     const d = new Date(ymd + "T00:00:00");
-    const dow = d.getDay(); // 0 Sun, 1 Mon...
+    const dow = d.getDay();
     const diff = (dow === 0) ? -6 : (1 - dow);
     d.setDate(d.getDate() + diff);
     return ymdOfDate(d);
   }
 
   function isoWeekLabel(ymd){
-    // 간단 label: "Wk MM/DD"
     const d = new Date(ymd + "T00:00:00");
     const mm = String(d.getMonth()+1).padStart(2,"0");
     const dd = String(d.getDate()).padStart(2,"0");
     return `Wk ${mm}/${dd}`;
   }
 
-  function renderGanttAxis(from, to){
-    const axis = document.getElementById("gAxis");
-    axis.innerHTML = "";
+  function renderGanttAxis(axisEl, from, to){
+    axisEl.innerHTML = "";
 
     const fromD = toIntDay(from);
     const toD = toIntDay(to);
     const span = Math.max(1, (toD - fromD + 1));
 
-    // Week ticks (Monday boundary)
     let cur = mondayOf(from);
-    // cur가 from보다 너무 뒤면 한 주 전으로
     if(toIntDay(cur) > fromD) cur = addDays(cur, -7);
 
     while(toIntDay(cur) <= toD){
@@ -1525,16 +1545,15 @@
       wk.style.left = `${leftPct}%`;
       wk.style.width = "0px";
       wk.textContent = isoWeekLabel(cur);
-      axis.appendChild(wk);
+      axisEl.appendChild(wk);
 
-      // minor line: 월요일 외에 중간(수요일 느낌) 가벼운 선 하나
       const mid = addDays(cur, 3);
       const midInt = toIntDay(mid);
       if(midInt >= fromD && midInt <= toD){
         const minor = document.createElement("div");
         minor.className = "gAxisMinor";
         minor.style.left = `${((midInt - fromD) / span) * 100}%`;
-        axis.appendChild(minor);
+        axisEl.appendChild(minor);
       }
 
       cur = addDays(cur, 7);
@@ -1545,13 +1564,11 @@
     const wrap = document.getElementById("gWrap");
     if(!wrap) return;
 
-    // due 있는 것만
     const items = TASKS
       .filter(t => fmtISODate(t.due_date))
       .slice()
       .sort((a,b)=> (a.id||0) - (b.id||0));
 
-    // 초기 from/to 세팅
     const fromInp = document.getElementById("gFrom");
     const toInp = document.getElementById("gTo");
 
@@ -1564,7 +1581,7 @@
     const from = fromInp.value;
     const to = toInp.value;
 
-    renderGanttAxis(from, to);
+    renderGanttAxis(document.getElementById("gAxis"), from, to);
 
     const fromD = toIntDay(from);
     const toD = toIntDay(to);
@@ -1602,10 +1619,9 @@
 
       const area = row.querySelector(".gBarArea");
 
-      // weekend shading + today line
       for(let day = fromD; day <= toD; day++){
         const dt = new Date(day * 24*60*60*1000);
-        const dow = dt.getDay(); // 0=Sun,6=Sat
+        const dow = dt.getDay();
         if(dow === 0 || dow === 6){
           const leftPct = ((day - fromD) / span) * 100;
           const wPct = (1 / span) * 100;
@@ -1625,7 +1641,6 @@
         area.appendChild(line);
       }
 
-      // bar
       const bar = document.createElement("div");
       const pr = (t.priority || "med").toLowerCase();
       bar.className = "gBar " + (t.status || "todo") + " prio-" + pr;
@@ -1634,7 +1649,7 @@
       const le = Math.min(toD, e);
 
       const leftPct = ((ls - fromD) / span) * 100;
-      const rightPct = ((le - fromD + 1) / span) * 100; // include end day
+      const rightPct = ((le - fromD + 1) / span) * 100;
       const widthPct = Math.max(0.5, rightPct - leftPct);
 
       bar.style.left = `${leftPct}%`;
@@ -1685,25 +1700,31 @@
   async function renderPeopleView(){
     const box = document.getElementById("pvBox");
     const sel = document.getElementById("pvPerson");
-    if(!box || !sel) return;
+    const pvWrap = document.getElementById("pvGantt");
+    const pvAxis = document.getElementById("pvAxis");
+    const pvSummary = document.getElementById("pvSummary");
+    const pvFromInp = document.getElementById("pvFrom");
+    const pvToInp = document.getElementById("pvTo");
+    if(!box || !sel || !pvWrap || !pvAxis || !pvSummary || !pvFromInp || !pvToInp) return;
 
     const pid = sel.value;
     if(!pid){
-      box.innerHTML = `<div class="muted">사람을 선택하면 할당된 작업과 due 일정이 표시됩니다.</div>`;
+      box.innerHTML = `<div class="muted">사람을 선택하면 할당된 작업과 due 일정(간트)이 표시됩니다.</div>`;
+      pvWrap.innerHTML = "";
+      pvAxis.innerHTML = "";
+      pvSummary.textContent = "";
+      pvFromInp.value = "";
+      pvToInp.value = "";
       return;
     }
 
-    // 해당 사람에게 할당된 task 찾기: assignments 조회를 TASKS에 대해 캐시 기반으로
     const targetId = Number(pid);
     const rows = [];
 
-    // assignments는 task별로 server 호출이므로, MVP에서는 이미 hydrateAssignees로 "마지막 할당자"만 캐시됨.
-    // 그래서 여기서는 정확도를 위해 "task별 assignments"를 다시 한번 불러와서 필터
     const tasks = TASKS.slice().sort((a,b)=> (a.id||0)-(b.id||0));
     for(const t of tasks){
       const assigns = await fetchAssignments(t.id);
       if(!assigns || assigns.length === 0) continue;
-      // 마지막 할당 기준
       assigns.sort((a,b)=> (a.id||0)-(b.id||0));
       const a = assigns[assigns.length-1];
       if(Number(a.person_id) === targetId){
@@ -1716,10 +1737,14 @@
 
     if(rows.length === 0){
       box.innerHTML = `<div class="muted">할당된 작업이 없습니다.</div>`;
+      pvWrap.innerHTML = "";
+      pvAxis.innerHTML = "";
+      pvSummary.textContent = "";
+      pvFromInp.value = "";
+      pvToInp.value = "";
       return;
     }
 
-    // due 정렬: due 없으면 뒤로
     rows.sort((x,y)=>{
       const dx = fmtISODate(x.task.due_date) || "9999-12-31";
       const dy = fmtISODate(y.task.due_date) || "9999-12-31";
@@ -1727,6 +1752,7 @@
       return (x.task.id||0)-(y.task.id||0);
     });
 
+    // 리스트
     const html = rows.map(r=>{
       const t = r.task;
       const start = fmtISODate(t.start_date);
@@ -1746,12 +1772,128 @@
         </div>
       `;
     }).join("");
-
     box.innerHTML = html;
+
+    // 사람 전용 간트: due 있는 것만
+    const personTasks = rows.map(r=>r.task).filter(t=>fmtISODate(t.due_date));
+
+    // 기간 자동 설정(값 없을 때만)
+    if(!pvFromInp.value || !pvToInp.value){
+      const rng = autoGanttRange(personTasks);
+      pvFromInp.value = rng.from;
+      pvToInp.value = rng.to;
+    }
+
+    const from = pvFromInp.value;
+    const to = pvToInp.value;
+
+    renderGanttAxis(pvAxis, from, to);
+
+    const fromD = toIntDay(from);
+    const toD = toIntDay(to);
+    const span = Math.max(1, (toD - fromD + 1));
+
+    pvWrap.innerHTML = "";
+
+    let shown = 0;
+    personTasks
+      .slice()
+      .sort((a,b)=> (a.id||0)-(b.id||0))
+      .forEach(t=>{
+        const it = taskStartEnd(t);
+        if(!it) return;
+
+        const s = toIntDay(it.start);
+        const e = toIntDay(it.due);
+        if(e < fromD || s > toD) return;
+
+        shown++;
+
+        const row = document.createElement("div");
+        row.className = "gRow";
+
+        const ass = ASSIGNEE_CACHE.get(t.id) || "";
+        row.innerHTML = `
+          <div class="gLeft">
+            <b>#${esc(t.id)} [${esc(t.task_group)}] ${esc(t.name)} ${prioPill(t.priority)}</b>
+            <div class="meta2">
+              status: ${esc(t.status)} · priority: ${esc(t.priority)}<br/>
+              start: ${esc(it.start)} · due: ${esc(it.due)}
+              ${ass ? `<br/>assignee: ${esc(ass)}` : ""}
+            </div>
+          </div>
+          <div class="gBarArea"></div>
+        `;
+
+        const area = row.querySelector(".gBarArea");
+
+        for(let day = fromD; day <= toD; day++){
+          const dt = new Date(day * 24*60*60*1000);
+          const dow = dt.getDay();
+          if(dow === 0 || dow === 6){
+            const leftPct = ((day - fromD) / span) * 100;
+            const wPct = (1 / span) * 100;
+            const w = document.createElement("div");
+            w.className = "gWeekend";
+            w.style.left = `${leftPct}%`;
+            w.style.width = `${wPct}%`;
+            area.appendChild(w);
+          }
+        }
+
+        const td = toIntDay(todayYMD());
+        if(td >= fromD && td <= toD){
+          const leftPct = ((td - fromD) / span) * 100;
+          const line = document.createElement("div");
+          line.className = "gTodayLine";
+          line.style.left = `${leftPct}%`;
+          area.appendChild(line);
+        }
+
+        const bar = document.createElement("div");
+        const pr = (t.priority || "med").toLowerCase();
+        bar.className = "gBar " + (t.status || "todo") + " prio-" + pr;
+
+        const ls = Math.max(fromD, s);
+        const le = Math.min(toD, e);
+
+        const leftPct = ((ls - fromD) / span) * 100;
+        const rightPct = ((le - fromD + 1) / span) * 100;
+        const widthPct = Math.max(0.5, rightPct - leftPct);
+
+        bar.style.left = `${leftPct}%`;
+        bar.style.width = `${widthPct}%`;
+        bar.title = `#${t.id} ${t.name} (${it.start}~${it.due})`;
+        bar.onclick = ()=> openModalFromTask(t);
+
+        area.appendChild(bar);
+        pvWrap.appendChild(row);
+      });
+
+    pvSummary.textContent = `표시 범위: ${from} ~ ${to} (총 ${toD-fromD+1}일) · 항목 수: ${shown}`;
   }
 
-  document.getElementById("pvPerson").onchange = renderPeopleView;
+  document.getElementById("pvPerson").onchange = ()=>{
+    // 사람 바꾸면 사람전용 기간은 자동 재설정되도록 비움
+    document.getElementById("pvFrom").value = "";
+    document.getElementById("pvTo").value = "";
+    renderPeopleView();
+  };
   document.getElementById("btnPvReload").onclick = refreshAll;
+
+  document.getElementById("btnPvGAuto").onclick = async ()=>{
+    await renderPeopleView(); // rows 계산 포함
+    // renderPeopleView 안에서 pvFrom/pvTo 없으면 자동 세팅됨. 값이 이미 있으면 유지되므로 강제로 재설정:
+    const pid = document.getElementById("pvPerson").value;
+    if(!pid) return;
+    // 강제 auto: 현재 선택자 기반으로 pvFrom/pvTo 비우고 재렌더
+    document.getElementById("pvFrom").value = "";
+    document.getElementById("pvTo").value = "";
+    await renderPeopleView();
+  };
+
+  document.getElementById("pvFrom").onchange = renderPeopleView;
+  document.getElementById("pvTo").onchange = renderPeopleView;
 
   // -----------------------
   // Admin: delete conference (password prompt)
@@ -1817,7 +1959,6 @@
       CURRENT_CONF_ID = conf.id;
       CURRENT_CONF = conf;
 
-      // ✅ 간트 입력 초기화 (새 학회 생성 후 auto range 재계산되게)
       document.getElementById("gFrom").value = "";
       document.getElementById("gTo").value = "";
 
@@ -1840,9 +1981,12 @@
       CURRENT_CONF = null;
     }
 
-    // ✅ 학회 바꾸면 간트 범위 새로 자동 계산되게
     document.getElementById("gFrom").value = "";
     document.getElementById("gTo").value = "";
+
+    // 사람별 간트 기간도 리셋
+    document.getElementById("pvFrom").value = "";
+    document.getElementById("pvTo").value = "";
 
     await refreshAll();
   };
